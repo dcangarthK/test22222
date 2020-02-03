@@ -1,0 +1,131 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: logstash-pipeline
+data:
+  01-beats-input.conf: |-
+    input {
+      beats {
+        port => 5044
+        ssl => false
+      }
+    }
+  02-http-input.conf: |-
+    input {
+      http {
+        host => "0.0.0.0"
+        port => 8080
+      }
+    }
+  10-lsdbay-filter.conf: |-
+    filter {
+      if "lsdbay_log" in [tags] {
+        mutate { add_tag => "lsdbay_event" }
+        grok {
+          match => { "message" => "%{SYSLOGTIMESTAMP:lsdbay_timestamp} lsdbay %{WORD:lsdbay_priority} %{GREEDYDATA:lsdbay_msg}" }
+        }
+        date {
+          match => [ "lsdbay_timestamp", "MMM  d YYYY HH:mm:ss", "MMM dd YYYY HH:mm:ss", "MMM dd HH:mm:ss" ]
+          timezone => "Africa/Johannesburg"
+        }
+      }
+      if "lsdbay_event" in [tags] {
+        if [lsdbay_msg] =~ "Login failed" {
+          mutate { add_tag => "lsdbay_login_failed" }
+          grok {
+            match => { "lsdbay_msg" => "Login failed \- ip: %{IPORHOST:lsdbay_fsrcip}, username: %{NOTSPACE:lsdbay_fusername}, password: %{NOTSPACE:lsdbay_fpasswd}" }
+          }
+        }
+        if [lsdbay_msg] =~ "Login succeeded" {
+          mutate { add_tag => "lsdbay_login_succeeded" }
+          grok {
+            match => { "lsdbay_msg" => "Login succeeded \- ip: %{IPORHOST:lsdbay_srcip}, username: %{NOTSPACE:lsdbay_username}" }
+          }
+        }
+        if [lsdbay_msg] =~ "Logout succeeded" {
+          mutate { add_tag => "lsdbay_logout_succeeded" }
+          grok {
+            match => { "lsdbay_msg" => "Logout succeeded \- ip: %{IPORHOST:lsdbay_srcip}, userid: %{NUMBER:lsdbay_userid:int}, username: %{NOTSPACE:lsdbay_username}" }
+          }
+        }
+        if [lsdbay_msg] =~ "Order succeeded" {
+          mutate { add_tag => "lsdbay_order_succeeded" }
+          grok {
+            match => { "lsdbay_msg" => "Order succeeded \- ip: %{IPORHOST:lsdbay_srcip}, userid: %{NUMBER:lsdbay_userid:int}, username: %{NOTSPACE:lsdbay_username}, item: %{GREEDYDATA:lsdbay_item}, qty: %{NUMBER:lsdbay_qty:int}" }
+          }
+        }
+      }
+    }
+  11-firewall-filter.conf: |-
+    filter {
+      if "firewall" in [tags] {
+        grok {
+          match => { "message" => "((%{SYSLOGTIMESTAMP:fw_timestamp})\s*(%{HOSTNAME:fw_host})\s*kernel\S+\s*(%{WORD:fw_action})?.*IN=(%{USERNAME:fw_in_interface})?.*OUT=(%{USERNAME:fw_out_interface})?.*MAC=(%{COMMONMAC:fw_dst_mac}):(%{COMMONMAC:fw_src_mac})?.*SRC=(%{IPV4:fw_src_ip}).*DST=(%{IPV4:fw_dst_ip}).*PROTO=(%{WORD:fw_protocol}).?*SPT=(%{INT:fw_src_port}?.*DPT=%{INT:fw_dst_port}?.*))" }
+        }
+        mutate {
+          add_field => { "red_src" => "%{fw_src_ip}" }
+        }
+        date {
+          match => [ "fw_timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+          timezone => "Africa/Johannesburg"
+        }
+      }
+    }
+  12-secure-filter.conf: |-
+    filter {
+      if "secure" in [tags] {
+        mutate { add_tag => "secure" }
+        grok {
+          match => { "message" => "%{SYSLOGTIMESTAMP:secure_timestamp} %{HOSTNAME:secure_hostname} %{GREEDYDATA:secure_msg}" }
+        }
+        date {
+          match => [ "secure_timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+          timezone => "Africa/Johannesburg"
+        }
+      }
+      if "secure" in [tags] {
+        if [secure_msg] =~ "sshd" {
+          mutate { add_tag => "sshd" }
+          grok {
+            match => { "secure_msg" => "sshd\[%{NUMBER:sshd_pid:int}\]: %{GREEDYDATA:sshd_msg}" }
+          }
+        }
+      }
+      if "sshd" in [tags] {
+        if [sshd_msg] =~ "Failed password for invalid user" {
+          mutate { add_tag => "sshd_invalid_user" }
+          grok {
+            match => { "sshd_msg" => "Failed password for invalid user %{NOTSPACE:sshd_invalid_user} from %{IPORHOST:sshd_invalid_user_ip} port %{NUMBER:sshd_invalid_user_port} ssh2" }
+          }
+          mutate {
+            add_field => { "red_src" => "%{sshd_invalid_user_ip}" }
+          }
+        }
+      }
+    }  
+  30-es-output.conf: |-
+    output {
+      if "event_source" not in [fields] {
+        elasticsearch {
+          hosts => ["https://elasticsearch-es-http:9200"]
+          ssl => true
+          cacert => "/usr/share/logstash/certs/tls.crt"
+          sniffing => false
+          manage_template => false
+          user => elastic
+          password => ""
+          index => "logstash-%{+YYYY.MM.dd}"
+        }
+      } else {
+        elasticsearch {
+          hosts => ["https://elasticsearch-es-http:9200"]
+          ssl => true
+          cacert => "/usr/share/logstash/certs/tls.crt"
+          sniffing => false
+          manage_template => false
+          user => elastic
+          password => ""
+          index => "%{[fields][event_source]}-%{+YYYY.MM.dd}"
+        }
+      }
+    }

@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: elastic
+    component: logstash
+  name: logstash
+spec:
+  ports:
+  - port: 5044
+    protocol: TCP
+    targetPort: 5044
+    name: logstash-beats
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+    name: logstash-http
+  - port: 9600
+    protocol: TCP
+    targetPort: 9600
+    name: logstash-monitor
+  selector:
+    app: elastic
+    component: logstash
+  sessionAffinity: None
+  type: ClusterIP

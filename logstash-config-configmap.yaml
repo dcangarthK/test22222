@@ -1,0 +1,145 @@
+apiVersion: v1
+data:
+  logstash.yml: |-
+    http.host: "0.0.0.0"
+    xpack.monitoring.enabled: true
+    xpack.monitoring.elasticsearch.username: elastic
+    xpack.monitoring.elasticsearch.password: ""
+    xpack.monitoring.elasticsearch.hosts: [ "https://elasticsearch-es-http:9200" ]
+    xpack.monitoring.elasticsearch.ssl.certificate_authority: /usr/share/logstash/certs/tls.crt
+  jvm.options: |-
+    ## JVM configuration
+
+    # Xms represents the initial size of total heap space
+    # Xmx represents the maximum size of total heap space
+
+    -Xms768m
+    -Xmx768m
+
+    ################################################################
+    ## Expert settings
+    ################################################################
+    ##
+    ## All settings below this section are considered
+    ## expert settings. Don't tamper with them unless
+    ## you understand what you are doing
+    ##
+    ################################################################
+
+    ## GC configuration
+    -XX:+UseConcMarkSweepGC
+    -XX:CMSInitiatingOccupancyFraction=75
+    -XX:+UseCMSInitiatingOccupancyOnly
+
+    ## Locale
+    # Set the locale language
+    #-Duser.language=en
+
+    # Set the locale country
+    #-Duser.country=US
+
+    # Set the locale variant, if any
+    #-Duser.variant=
+
+    ## basic
+
+    # set the I/O temp directory
+    #-Djava.io.tmpdir=/home/duncan
+
+    # set to headless, just in case
+    -Djava.awt.headless=true
+
+    # ensure UTF-8 encoding by default (e.g. filenames)
+    -Dfile.encoding=UTF-8
+
+    # use our provided JNA always versus the system one
+    #-Djna.nosys=true
+
+    # Turn on JRuby invokedynamic
+    -Djruby.compile.invokedynamic=true
+    # Force Compilation
+    -Djruby.jit.threshold=0
+    # Make sure joni regexp interruptability is enabled
+    -Djruby.regexp.interruptible=true
+
+    ## heap dumps
+
+    # generate a heap dump when an allocation from the Java heap fails
+    # heap dumps are created in the working directory of the JVM
+    -XX:+HeapDumpOnOutOfMemoryError
+
+    # specify an alternative path for heap dumps
+    # ensure the directory exists and has sufficient space
+    #-XX:HeapDumpPath=/heapdump.hprof
+
+    ## GC logging
+    #-XX:+PrintGCDetails
+    #-XX:+PrintGCTimeStamps
+    #-XX:+PrintGCDateStamps
+    #-XX:+PrintClassHistogram
+    #-XX:+PrintTenuringDistribution
+    #-XX:+PrintGCApplicationStoppedTime
+
+    # log GC status to a file with time stamps
+    # ensure the directory exists
+    #-Xloggc:
+
+    # Entropy source for randomness
+    -Djava.security.egd=file:/dev/urandom
+
+    # Copy the logging context from parent threads to children
+    -Dlog4j2.isThreadContextMapInheritable=true
+  pipelines.yml: "# This file is where you define your pipelines. You can define multiple.\n#
+    For more information on multiple pipelines, see the documentation:\n#   https://www.elastic.co/guide/en/logstash/current/multiple-pipelines.html\n\n-
+    pipeline.id: main\n  path.config: \"/usr/share/logstash/pipeline\"  "
+  startup.options: |-
+    ################################################################################
+    # These settings are ONLY used by /bin/system-install to create a custom
+    # startup script for Logstash and is not used by Logstash itself. It should
+    # automagically use the init system (systemd, upstart, sysv, etc.) that your
+    # Linux distribution uses.
+    #
+    # After changing anything here, you need to re-run /bin/system-install
+    # as root to push the changes to the init script.
+    ################################################################################
+
+    # Override Java location
+    #JAVACMD=/usr/bin/java
+
+    # Set a home directory
+    LS_HOME=/usr/share/logstash
+
+    # logstash settings directory, the path which contains logstash.yml
+    LS_SETTINGS_DIR=/etc/logstash
+
+    # Arguments to pass to logstash
+    LS_OPTS="--path.settings "
+
+    # Arguments to pass to java
+    LS_JAVA_OPTS=""
+
+    # pidfiles aren't used the same way for upstart and systemd; this is for sysv users.
+    LS_PIDFILE=/var/run/logstash.pid
+
+    # user and group id to be invoked as
+    LS_USER=logstash
+    LS_GROUP=logstash
+
+    # Enable GC logging by uncommenting the appropriate lines in the GC logging
+    # section in jvm.options
+    LS_GC_LOG_FILE=/var/log/logstash/gc.log
+
+    # Open file limit
+    LS_OPEN_FILES=16384
+
+    # Nice level
+    LS_NICE=19
+
+    # Change these to have the init script named and described differently
+    # This is useful when running multiple instances of Logstash on the same
+    # physical box or vm
+    SERVICE_NAME="logstash"
+    SERVICE_DESCRIPTION="logstash"
+kind: ConfigMap
+metadata:
+  name: logstash-config
